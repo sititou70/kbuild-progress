@@ -1,0 +1,134 @@
+#!/usr/bin/env -S python -u
+# SPDX-License-Identifier: GPL-2.0
+#
+# Show progress information for Kbuild
+#
+# Usage:
+#   ./kbuild-progress [make args]
+#   Use ./kbuild-progress instead of make command
+# Example:
+#   $ cd linux-x.x.x
+#   $ ./(path to kbuild-progress dir)/kbuild-progress -j4 vmlinux
+#
+# Copyright Takuya Shizukuishi <sititou70@gmail.com>
+
+import os
+import sys
+import subprocess
+import re
+from time import time
+import datetime
+from Queue import Queue
+import math
+
+
+class ProgressCalculator:
+    resent_progress_queue = None
+    all_jobs_num = 0
+    put_progress_cnt = 0
+    eta_calculation_skip_step = 0
+
+    def __init__(self, all_job_num, eta_calculation_window_size=10, eta_calculation_skip_step=10):
+        self.resent_progress_queue = Queue(eta_calculation_window_size)
+        self.all_jobs_num = all_job_num
+        self.eta_calculation_skip_step = eta_calculation_skip_step
+
+    def putProgressInfo(self, done_jobs_num):
+        self.put_progress_cnt += 1
+        if self.put_progress_cnt == self.eta_calculation_skip_step:
+            self.put_progress_cnt = 0
+        if self.put_progress_cnt != 0:
+            return
+
+        if self.resent_progress_queue.full():
+            self.resent_progress_queue.get()
+        self.resent_progress_queue.put(
+            {"time": time(), "done_jobs_num": done_jobs_num})
+
+    def getProgressInfo(self, done_jobs_num):
+        progress = (done_jobs_num / float(self.all_jobs_num))
+
+        if self.resent_progress_queue.empty():
+            return {"progress": progress}
+
+        oldest_progress = self.resent_progress_queue.queue[0]
+        latest_progress = self.resent_progress_queue.queue[-1]
+        resent_processed_jobs_num = latest_progress["done_jobs_num"] - \
+            oldest_progress["done_jobs_num"]
+        resent_elapsed_time = latest_progress["time"] - oldest_progress["time"]
+
+        if resent_processed_jobs_num == 0:
+            return {"progress": progress}
+
+        rest_message_num = self.all_jobs_num - latest_progress["done_jobs_num"]
+        eta_secs = rest_message_num * \
+            (resent_elapsed_time / resent_processed_jobs_num)
+
+        return {"progress": progress, "eta_secs": eta_secs}
+
+
+def getKbuildMessages(make_args):
+    make_message_pattern = re.compile("echo '(.*?CC.+?)';")
+
+    def getMessageFromLine(line):
+        matched = re.findall(make_message_pattern, line)
+        if len(matched) == 0:
+            return None
+
+        return matched[0]
+
+    make_process = subprocess.Popen(
+        ["make", "-n", "-k"] + make_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+    kbuild_messages = []
+    for line in make_process.stdout:
+        kbuild_messages.append(getMessageFromLine(line))
+
+    return filter(lambda x: x is not None, kbuild_messages)
+
+
+def buildWithProgress(make_args, kbuild_messages):
+    message_set = set(kbuild_messages)
+    all_messages_num = len(kbuild_messages)
+    all_messages_num = 1 if all_messages_num == 0 else all_messages_num
+    progress_calculator = ProgressCalculator(all_messages_num)
+
+    make_process = subprocess.Popen(
+        ["make"] + make_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1)
+
+    while True:
+        build_message = make_process.stdout.readline()
+        if build_message == '':
+            break
+
+        try:
+            message_set.remove(build_message[:-1])
+        except KeyError:
+            pass
+
+        done_jobs_num = all_messages_num - len(message_set)
+        progress_calculator.putProgressInfo(done_jobs_num)
+        progress_info = progress_calculator.getProgressInfo(done_jobs_num)
+        if "eta_secs" in progress_info:
+            sys.stdout.write("%.2f%% ETA %s %s" % (progress_info["progress"] * 100, str(
+                datetime.timedelta(seconds=math.floor(progress_info["eta_secs"]))), build_message))
+        else:
+            sys.stdout.write("%.2f%% ETA calculating... %s" %
+                             (progress_info["progress"] * 100, build_message))
+
+
+def main():
+    make_args = sys.argv[1:]
+
+    sys.stdout.write(
+        "[kbuild-progress] collecting the information needed to show progress...")
+    preprocess_start_time = time()
+    kbuild_messages = getKbuildMessages(make_args)
+    preprocess_end_time = time()
+    print("DONE. %dms" % ((preprocess_end_time - preprocess_start_time) * 1000))
+
+    print("[kbuild-progress] start the build.")
+    buildWithProgress(make_args, kbuild_messages)
+
+
+main()
