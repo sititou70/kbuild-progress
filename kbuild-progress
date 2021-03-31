@@ -1,11 +1,12 @@
 #!/usr/bin/env -S python -u
 # SPDX-License-Identifier: GPL-2.0
 #
-# Show progress information for Kbuild
+# Show progress information for Kbuild.
+# This script works on both Python 2 and 3.
 #
 # Usage:
 #   ./kbuild-progress [make args]
-#   Use ./kbuild-progress instead of make command
+#   Use ./kbuild-progress instead of make command.
 # Example:
 #   $ cd linux-x.x.x
 #   $ ./(path to kbuild-progress dir)/kbuild-progress -j4 vmlinux
@@ -18,8 +19,11 @@ import subprocess
 import re
 from time import time
 import datetime
-from Queue import Queue
 import math
+import platform
+import importlib
+
+IS_PY2 = True if platform.python_version_tuple()[0] == "2" else False
 
 
 class ProgressCalculator:
@@ -28,8 +32,12 @@ class ProgressCalculator:
     put_progress_cnt = 0
     eta_calculation_skip_step = 0
 
-    def __init__(self, all_job_num, eta_calculation_window_size=10, eta_calculation_skip_step=10):
-        self.resent_progress_queue = Queue(eta_calculation_window_size)
+    def __init__(self, all_job_num, eta_calculation_window_size=5, eta_calculation_skip_step=10):
+        queuelib = importlib.import_module(
+            "Queue") if IS_PY2 else importlib.import_module("queue")
+        print(queuelib)
+        self.resent_progress_queue = queuelib.Queue(
+            eta_calculation_window_size)
         self.all_jobs_num = all_job_num
         self.eta_calculation_skip_step = eta_calculation_skip_step
 
@@ -71,14 +79,14 @@ def getKbuildMessages(make_args):
     make_message_pattern = re.compile("echo '(.*?CC.+?)';")
 
     def getMessageFromLine(line):
-        matched = re.findall(make_message_pattern, line)
+        matched = make_message_pattern.findall(str(line))
         if len(matched) == 0:
             return None
 
         return matched[0]
 
-    make_process = subprocess.Popen(
-        ["make", "-n", "-k"] + make_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    make_process = subprocess.Popen(["make", "-n", "-k"] + make_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) if IS_PY2 else subprocess.Popen([
+        "make", "-n", "-k"] + make_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
     kbuild_messages = []
     for line in make_process.stdout:
@@ -89,12 +97,12 @@ def getKbuildMessages(make_args):
 
 def buildWithProgress(make_args, kbuild_messages):
     message_set = set(kbuild_messages)
-    all_messages_num = len(kbuild_messages)
+    all_messages_num = len(message_set)
     all_messages_num = 1 if all_messages_num == 0 else all_messages_num
     progress_calculator = ProgressCalculator(all_messages_num)
 
-    make_process = subprocess.Popen(
-        ["make"] + make_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1)
+    make_process = subprocess.Popen(["make"] + make_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1) if IS_PY2 else subprocess.Popen([
+        "make"] + make_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
     while True:
         build_message = make_process.stdout.readline()

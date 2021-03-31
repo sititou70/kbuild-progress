@@ -17,6 +17,10 @@ Show progress information for Kbuild as below.
 19.42% ETA 0:04:53   CC      drivers/acpi/fan.o
 ```
 
+## Dependency
+
+- Python 2 or 3 (Works with both)
+
 ## Usage
 
 `./kbuild-progress [make args]`
