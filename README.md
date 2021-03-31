@@ -19,7 +19,7 @@ Show progress information for Kbuild as below.
 
 ## Dependency
 
-- Python 2 or 3 (Works with both)
+- Python 2 or 3 (works with both)
 
 ## Usage
 
@@ -37,7 +37,7 @@ $ ./(path to kbuild-progress dir)/kbuild-progress -j4 vmlinux
 ## How it works
 
 1. Use the `-n` option of the `make` command to know in advance what kind of work is required for C compilation of kernel build. This work takes 1 second (`make allnoconfig`)\* to 14 seconds (`make allyesconfig`)\*, often 2.5 seconds(`make defconfig`)\*.
-1. Run the actual build without the `-n` option. Based on this information and the messages displayed in the actual build, kbuild-progress displays progress information.
+1. Run the actual build without the `-n` option. Based on step 1 information and the messages displayed in the actual build, kbuild-progress displays progress information.
 
 \*Measured with [my ThinkPad E14](./my-thinkpad-e14-spec.log)
 
