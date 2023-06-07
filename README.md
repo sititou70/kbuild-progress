@@ -19,7 +19,9 @@ Show progress information for Kbuild as below.
 
 ## Dependency
 
-- Python 2 or 3 (works with both)
+- Python 3
+
+(Also works with Python2. Rewrite the shebang in the script file if necessary.)
 
 ## Usage
 

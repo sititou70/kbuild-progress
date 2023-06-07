@@ -1,8 +1,7 @@
-#!/usr/bin/env -S python -u
+#!/usr/bin/env -S python3 -u
 # SPDX-License-Identifier: GPL-2.0
 #
 # Show progress information for Kbuild.
-# This script works on both Python 2 and 3.
 #
 # Usage:
 #   ./kbuild-progress [make args]
